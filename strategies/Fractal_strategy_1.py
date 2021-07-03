@@ -7,11 +7,11 @@ class FractalStrategy(Strategy):
     def __init__(self, df_data, show_trades=False):
         super().__init__(df_data)
         self.show_trades = show_trades
-        self.profit_multiplier = Hyperparameter(0.05, 5, 1.2)
-        self.stop_multiplier = Hyperparameter(1., 3., 1)
-        self.order_risk_limiter = Hyperparameter(0.01, 0.5, 0.1)
-        self.ema_n = DiscreteHyperparameter(list(range(2, 451)), 200)
-        self.fractal_n = DiscreteHyperparameter(list(range(2, 7)), 5)
+        self.profit_multiplier = Hyperparameter(0.8, 2.5, 1.2)
+        self.stop_multiplier = Hyperparameter(1., 2., 1)
+        self.order_risk_limiter = Hyperparameter(0.3, 1., 0.4)
+        self.ema_n = DiscreteHyperparameter(list(range(100, 500)), 200)
+        self.fractal_n = DiscreteHyperparameter(list(range(3, 7)), 5)
 
     def set_strategy_hyperparameters(self, values: Dict):
         self.profit_multiplier.set_value(values['profit_multiplier'])
@@ -36,9 +36,10 @@ class FractalStrategy(Strategy):
         self.fee.set_value(values[0])
 
     def compute_indicators(self):
-        self.compute_EMA(self.ema_n.get_value())
-        self.compute_WilliamsFractal(self.fractal_n.get_value())
-        self.t_min = max(self.ema_n.get_value(), self.fractal_n.get_value() + 1)
+        for i, data in enumerate(self.price_data):
+            self.compute_EMA(self.ema_n.get_value(), data)
+            self.compute_WilliamsFractal(self.fractal_n.get_value(), data)
+            self.t_min[i] = max(self.ema_n.get_value(), self.fractal_n.get_value() + 1)
 
     def find_latest_top_fractal(self, fractals, t, Close_data, Open_data, EMA):
         p = t - 2
@@ -56,85 +57,85 @@ class FractalStrategy(Strategy):
             p -= 1
         return -1
 
-    def place_trade(self, t):
-        if self.price_data['Open'].get(t) >= self.price_data[f'EMA{self.ema_n.get_value()}'].get(t) and self.price_data['Close'].get(t)\
-                >= self.price_data[f'EMA{self.ema_n.get_value()}'].get(t):
+    def place_trade(self, t, t_min, price_data):
+        if price_data['Open'].get(t) >= price_data[f'EMA{self.ema_n.get_value()}'].get(t) and price_data['Close'].get(t)\
+                >= price_data[f'EMA{self.ema_n.get_value()}'].get(t):
             # Place long
-            top_fractal = self.find_latest_top_fractal(self.price_data[f'BearFractal{self.fractal_n.get_value()}'], t,
-                                                       self.price_data['Close'],
-                                                       self.price_data['Open'],
-                                                       self.price_data[f'EMA{self.ema_n.get_value()}'])
-            if top_fractal < self.t_min or self.price_data['Close'].get(t) < self.price_data['High'].get(top_fractal):
+            top_fractal = self.find_latest_top_fractal(price_data[f'BearFractal{self.fractal_n.get_value()}'], t,
+                                                       price_data['Close'],
+                                                       price_data['Open'],
+                                                       price_data[f'EMA{self.ema_n.get_value()}'])
+            if top_fractal < t_min or price_data['Close'].get(t) < price_data['High'].get(top_fractal):
                 return None, False
 
             # Don`t place a trade if it is too volatile
-            if 1 - (self.price_data['Low'].get(t) / self.stop_multiplier.get_value()) / self.price_data['Close'].get(
+            if 1 - (price_data['Low'].get(t) / self.stop_multiplier.get_value()) / price_data['Close'].get(
                     t) >= self.order_risk_limiter.get_value():
                 return None, False
 
-            entry = self.price_data['Close'].get(t)
-            stop_loss = self.price_data['Low'].get(t) / self.stop_multiplier.get_value()
-            take_profit = self.price_data['Close'].get(t) + self.profit_multiplier.get_value() * (
-                    self.price_data['Close'].get(t) - self.price_data['Low'].get(t))
+            entry = price_data['Close'].get(t)
+            stop_loss = price_data['Low'].get(t) + (price_data['Low'].get(t) - entry) * self.stop_multiplier.get_value()
+            take_profit = price_data['Close'].get(t) + self.profit_multiplier.get_value() * (
+                    price_data['Close'].get(t) - price_data['Low'].get(t))
 
             return Trade('Long', entry, 0, take_profit, stop_loss, t), True
 
-        elif self.price_data['Open'].get(t) <= self.price_data[f'EMA{self.ema_n.get_value()}'].get(t) and \
-                self.price_data['Close'].get(t) <= self.price_data[
+        elif price_data['Open'].get(t) <= price_data[f'EMA{self.ema_n.get_value()}'].get(t) and \
+                price_data['Close'].get(t) <= price_data[
             f'EMA{self.ema_n.get_value()}'].get(t):
             # Place short
             bottom_fractal = self.find_latest_bottom_fractal(
-                self.price_data[f'BullFractal{self.fractal_n.get_value()}'], t,
-                self.price_data['Close'],
-                self.price_data['Open'], self.price_data[f'EMA{self.ema_n.get_value()}'])
-            if bottom_fractal < self.t_min or self.price_data['Close'].get(t) > self.price_data['Low'].get(bottom_fractal):
+                price_data[f'BullFractal{self.fractal_n.get_value()}'], t,
+                price_data['Close'],
+                price_data['Open'], price_data[f'EMA{self.ema_n.get_value()}'])
+            if bottom_fractal < t_min or price_data['Close'].get(t) > price_data['Low'].get(bottom_fractal):
                 return None, False
 
             # Don`t place a trade if it is too volatile
-            if 1 - self.price_data['Close'].get(t) / (self.price_data['High'].get(
+            if 1 - price_data['Close'].get(t) / (price_data['High'].get(
                     t) * self.stop_multiplier.get_value()) >= self.order_risk_limiter.get_value():
                 return None, False
 
-            entry = self.price_data['Close'].get(t)
-            stop_loss = self.price_data['High'].get(t) * self.stop_multiplier.get_value()
-            take_profit = self.price_data['Close'].get(t) + self.profit_multiplier.get_value() * (
-                    self.price_data['Close'].get(t) - self.price_data['High'].get(t))
+            entry = price_data['Close'].get(t)
+            stop_loss = price_data['High'].get(t) + (price_data['High'].get(t) - entry) * self.stop_multiplier.get_value()
+            take_profit = price_data['Close'].get(t) + self.profit_multiplier.get_value() * (
+                    price_data['Close'].get(t) - price_data['High'].get(t))
             return Trade('Short', entry, 0, take_profit, stop_loss, t), True
         return None, False
 
-    def end_trade(self, t, data: Trade) -> Tuple[bool, float]:
+    def end_trade(self, t, data: Trade, price_data) -> Tuple[bool, float]:
         order_type = data.type
         stop_loss = data.stop_loss
         entry = data.entry
         take_profit = data.take_profit
         t_entry = data.t_entry
-        if order_type == 'Long' and self.price_data['Low'].get(t) <= stop_loss:
+        if order_type == 'Long' and price_data['Low'].get(t) <= stop_loss:
             # Long order failed
             growth = stop_loss / entry - 1
             if self.show_trades:
                 print(
-                    f'Failed Long trade: Date: {self.price_data["Date"].get(t_entry)} Entry: {entry}, Stop: {stop_loss}, TakeProfit: {take_profit}, growth: {growth * 100}%')
+                    f'Failed Long trade: Date: {price_data["Date"].get(t_entry)} Entry: {entry}, Stop: {stop_loss}, TakeProfit: {take_profit}, growth: {growth * 100}%')
             return True, growth
-        elif order_type == 'Long' and self.price_data['High'].get(t) >= take_profit:
+        elif order_type == 'Long' and price_data['High'].get(t) >= take_profit:
             # Long trade succeeded
             growth = take_profit / entry - 1
             if self.show_trades:
                 print(
-                    f'Successful Long trade: Date: {self.price_data["Date"].get(t_entry)} Entry: {entry}, Stop: {stop_loss}, TakeProfit: {take_profit}, growth: {growth * 100}%')
+                    f'Successful Long trade: Date: {price_data["Date"].get(t_entry)} Entry: {entry}, Stop: {stop_loss}, TakeProfit: {take_profit}, growth: {growth * 100}%')
             return True, growth
-        elif order_type == 'Short' and self.price_data['Low'].get(t) <= take_profit:
+        elif order_type == 'Short' and price_data['Low'].get(t) <= take_profit:
             # Short trade succeeded
             growth = entry / take_profit - 1
             if self.show_trades:
                 print(
-                    f'Successful Short trade: Date: {self.price_data["Date"].get(t_entry)} Entry: {entry}, Stop: {stop_loss}, TakeProfit: {take_profit}, growth: {growth * 100}%')
+                    f'Successful Short trade: Date: {price_data["Date"].get(t_entry)} Entry: {entry}, Stop: {stop_loss}, TakeProfit: {take_profit}, growth: {growth * 100}%')
             return True, growth
-        elif order_type == 'Short' and self.price_data['Low'].get(t) >= stop_loss:
+        elif order_type == 'Short' and price_data['Low'].get(t) >= stop_loss:
             # Short trade failed
             growth = stop_loss / entry - 1
             if self.show_trades:
                 print(
-                    f'Failed Short trade: Date: {self.price_data["Date"].get(t_entry)} Entry: {entry}, Stop: {stop_loss}, TakeProfit: {take_profit}, growth: {growth * 100}%')
+                    f'Failed Short trade: Date: {price_data["Date"].get(t_entry)} Entry: {entry}, Stop: {stop_loss}, TakeProfit: {take_profit}, growth: {growth * 100}%')
             return True, growth
         return False, 0.
 

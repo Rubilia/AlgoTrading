@@ -4,7 +4,7 @@ secret_key = 'dTG8LbBIgbEsVhIr6XkAKJPj2NHEWN9IXr3vZsJaNPVO1k51h55dXMPF496vCddP'
 
 symbol = 'BTC'
 basecoin = 'USDT'
-timeframe = '30m'
+timeframe = '1m'
 start_date = '1 Apr 2019'
 binsizes = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "2h": 120, "4h": 240, "6h": 360, "1d": 1440, "3d": 4320}
 
