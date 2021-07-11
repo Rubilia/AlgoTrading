@@ -205,7 +205,7 @@ class Strategy:
     def end_trade(self, t, data: Trade, price_data) -> Tuple[bool, float]:
         return False, 0
 
-    def partial_test(self, trials, min_len=60, max_len=24 * 60):
+    def partial_test(self, trials, min_len=60 * 6, max_len=24 * 60):
         total_time = 0
         num_of_trades = 0
         successful_orders = 0
@@ -263,6 +263,12 @@ class Strategy:
                 data = trade_data
                 order_counter = 0
             t += 1
+
+        if is_active:
+            growth = price_data['Close'][t] / data.entry - 1
+            successful_orders += growth > 0
+            balance = (balance - trade_balance) + trade_balance * (growth * self.futures_multiplier + 1) * (
+                        1 - self.fee.get_value())
 
         # return statistics
         trading_time = ((t - t_min) * binsizes[timeframe]) # time in minutes

@@ -17,7 +17,7 @@ df = pd.DataFrame({'Date': date, 'Open': open, 'High': high, 'Low': low, 'Close'
 df['Date'] = pd.to_datetime(df['Date'], unit='ms')
 df.set_index('Date', inplace=True)
 
-df.to_csv(f'binance\\{symbol}_{basecoin}--{timeframe}.csv')
+df.to_csv(os.path.join('binance', f'{symbol}_{basecoin}--{timeframe}.csv'))
 
 df['EMA200'] = pd.Series.ewm(df['Close'], span=200).mean()
 df['EMA50'] = pd.Series.ewm(df['Close'], span=50).mean()
@@ -39,7 +39,7 @@ def compute_Avg_True_Range(n, price_data, name='ATR', use_n=True):
 
 compute_Avg_True_Range(14, df, use_n=False)
 
-df = df.tail(1000)
+df = df.head(10000)
 
 apds = [mpf.make_addplot(df['EMA200']),
         mpf.make_addplot(df['EMA50']),

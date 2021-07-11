@@ -53,7 +53,7 @@ class DoubleEMAStrategy(Strategy):
             self.compute_EMA(self.ema_trend_n.get_value(), data, name='ema_trend', use_n=False)
             self.compute_EMA(self.ema_signal_n.get_value(), data, name='ema_signal', use_n=False)
             if self.true_range.get_value():
-                self.compute_Avg_True_Range(self.atr_period.get_value(), data)
+                self.compute_Avg_True_Range(self.atr_period.get_value(), data, use_n=False)
             else:
                 self.compute_Avg_Range(self.atr_period.get_value(), data, name='ATR', use_n=False)
 
@@ -77,11 +77,11 @@ class DoubleEMAStrategy(Strategy):
         return None, None
 
     def is_touch(self, t, price_data):
-        return (price_data['High'][t] - price_data['ema_signal']) * \
+        return (price_data['High'][t] - price_data['ema_signal'][t]) * \
                (price_data['Low'][t] - price_data['ema_signal'][t]) < 0
 
     def find_touch(self, t_cross, t, price_data):
-        for p in range(t_cross, t + 1):
+        for p in range(t, t_cross - 1, -1):
             if self.is_touch(p, price_data):
                 return p
         return -1
@@ -97,7 +97,7 @@ class DoubleEMAStrategy(Strategy):
             touch = self.find_touch(cross, t, price_data)
             if touch == -1:
                 return None, False
-            for p in range(touch + 1, t + 1):
+            for p in range(cross + 1, t + 1):
                 # Keep track of candles below trend EMA
                 if price_data['Close'][p] < price_data['ema_trend'][t]:
                     out_of_trend += 1
@@ -122,7 +122,7 @@ class DoubleEMAStrategy(Strategy):
             touch = self.find_touch(cross, t, price_data)
             if touch == -1:
                 return None, False
-            for p in range(touch + 1, t + 1):
+            for p in range(cross + 1, t + 1):
                 # Keep track of candles above trend EMA
                 if price_data['Close'][p] > price_data['ema_trend'][t]:
                     out_of_trend += 1
