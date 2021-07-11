@@ -71,9 +71,12 @@ class DiscreteHyperparameter:
 
 
 class Strategy:
-    def __init__(self, df_data, test_balance=1000, risk_per_trade=.1, futures_multiplier=1, max_trade_time=24 * 60):
+    def __init__(self, df_data, test_balance=1000, risk_per_trade=.1, futures_multiplier=1,
+                 max_trade_time=24 * 60, show_trades=False):
+        self.show_trades = show_trades
         self.price_data = df_data if isinstance(df_data, list) else [df_data]
-        self.indicators = ['MA', 'EMA', 'BearFractal', 'BullFractal', 'Open', 'Low', 'High', 'Close']
+        self.indicators = ['MA', 'EMA', 'BearFractal', 'BullFractal', 'Open', 'Low', 'High',
+                           'Close', 'ATR', 'AR']
         self.fee = Hyperparameter(0, 0.05, 0.001)
         self.t_min = [0] * len(self.price_data)
         self.test_balance = test_balance
@@ -84,13 +87,39 @@ class Strategy:
     def set_data(self, df_data):
         self.price_data = df_data if isinstance(df_data, list) else [df_data]
 
-    def compute_MA(self, n, price_data):
-        price_data[f'MA{n}'] = price_data['Close'].rolling(window=n).mean()
+    def compute_MA(self, n, price_data, name='MA', use_n=True):
+        if use_n:
+            price_data[f'{name}{n}'] = price_data['Close'].rolling(window=n).mean()
+        else:
+            price_data[f'{name}'] = price_data['Close'].rolling(window=n).mean()
 
-    def compute_EMA(self, n, price_data):
-        price_data[f'EMA{n}'] = pd.Series.ewm(price_data['Close'], span=n).mean()
+    def compute_Avg_True_Range(self, n, price_data, name='ATR', use_n=True):
+        high_low = price_data['High'] - price_data['Low']
+        high_close = np.abs(price_data['High'] - price_data['Close'].shift())
+        low_close = np.abs(price_data['Low'] - price_data['Close'].shift())
 
-    def compute_WilliamsFractal(self, n, price_data):
+        ranges = pd.concat([high_low, high_close, low_close], axis=1)
+        true_range = np.max(ranges, axis=1)
+
+        if use_n:
+            price_data[f'{name}{n}'] = true_range.rolling(n).sum() / n
+        else:
+            price_data[f'{name}'] = true_range.rolling(n).sum() / n
+
+    def compute_Avg_Range(self, n, price_data, name='AR', use_n=True):
+        high_low = price_data['High'] - price_data['Low']
+        if use_n:
+            price_data[f'{name}{n}'] = high_low.rolling(n).sum() / n
+        else:
+            price_data[f'{name}'] = high_low.rolling(n).sum() / n
+
+    def compute_EMA(self, n, price_data, name='EMA', use_n=True):
+        if use_n:
+            price_data[f'{name}{n}'] = pd.Series.ewm(price_data['Close'], span=n).mean()
+        else:
+            price_data[f'{name}'] = pd.Series.ewm(price_data['Close'], span=n).mean()
+
+    def compute_WilliamsFractal(self, n, price_data, names=['BearFractal', 'BearFractal'], use_n=True):
         periods = tuple(range(-n, 0)) + tuple(range(1, n + 1))
 
         bear_fractal = pd.Series(np.logical_and.reduce([
@@ -101,8 +130,48 @@ class Strategy:
             price_data['Low'] < price_data['Low'].shift(period) for period in periods
         ]), index=price_data.index)
 
-        price_data[f'BearFractal{n}'] = bear_fractal
-        price_data[f'BullFractal{n}'] = bull_fractal
+        if use_n:
+            price_data[f'{names[0]}{n}'] = bear_fractal
+            price_data[f'{names[1]}{n}'] = bull_fractal
+        else:
+            price_data[f'{names[0]}'] = bear_fractal
+            price_data[f'{names[1]}'] = bull_fractal
+
+    def end_trade(self, t, data: Trade, price_data) -> Tuple[bool, float]:
+        order_type = data.type
+        stop_loss = data.stop_loss
+        entry = data.entry
+        take_profit = data.take_profit
+        t_entry = data.t_entry
+        if order_type == 'Long' and price_data['Low'].get(t) <= stop_loss:
+            # Long order failed
+            growth = stop_loss / entry - 1
+            if self.show_trades:
+                print(
+                    f'Failed Long trade: Date: {price_data["Date"].get(t_entry)} Entry: {entry}, Stop: {stop_loss}, TakeProfit: {take_profit}, growth: {growth * 100}%')
+            return True, growth
+        elif order_type == 'Long' and price_data['High'].get(t) >= take_profit:
+            # Long trade succeeded
+            growth = take_profit / entry - 1
+            if self.show_trades:
+                print(
+                    f'Successful Long trade: Date: {price_data["Date"].get(t_entry)} Entry: {entry}, Stop: {stop_loss}, TakeProfit: {take_profit}, growth: {growth * 100}%')
+            return True, growth
+        elif order_type == 'Short' and price_data['Low'].get(t) <= take_profit:
+            # Short trade succeeded
+            growth = entry / take_profit - 1
+            if self.show_trades:
+                print(
+                    f'Successful Short trade: Date: {price_data["Date"].get(t_entry)} Entry: {entry}, Stop: {stop_loss}, TakeProfit: {take_profit}, growth: {growth * 100}%')
+            return True, growth
+        elif order_type == 'Short' and price_data['Low'].get(t) >= stop_loss:
+            # Short trade failed
+            growth = stop_loss / entry - 1
+            if self.show_trades:
+                print(
+                    f'Failed Short trade: Date: {price_data["Date"].get(t_entry)} Entry: {entry}, Stop: {stop_loss}, TakeProfit: {take_profit}, growth: {growth * 100}%')
+            return True, growth
+        return False, 0.
 
     @abc.abstractmethod
     def get_hyperparameter_space(self) -> Dict[str, float]:

@@ -1,12 +1,13 @@
-from Strategy import Strategy, Data, Hyperparameter, DiscreteHyperparameter, Trade
 from typing import List, Tuple, Dict
-from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
+
+from hyperopt import hp
+
+from Strategy import Strategy, Hyperparameter, DiscreteHyperparameter, Trade
 
 
 class FractalStrategy(Strategy):
     def __init__(self, df_data, show_trades=False):
-        super().__init__(df_data)
-        self.show_trades = show_trades
+        super().__init__(df_data, show_trades=show_trades)
         self.profit_multiplier = Hyperparameter(0.8, 2.5, 1.2)
         self.stop_multiplier = Hyperparameter(1., 2., 1)
         self.order_risk_limiter = Hyperparameter(0.3, 1., 0.4)

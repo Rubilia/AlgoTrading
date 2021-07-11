@@ -1,18 +1,21 @@
+import os
+
 import pandas as pd
-from strategies.Fractal_strategy_1 import FractalStrategy
+
+from strategies.DoubleEMA.Double_EMA_strategy import DoubleEMAStrategy
 from utils import symbol, basecoin, timeframe, binsizes
-from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
+from hyperopt import fmin, tpe, STATUS_OK, Trials
 
 if __name__ == '__main__':
-    price_data = pd.read_csv(f'./binance\\{symbol}_{basecoin}--{timeframe}.csv')
-    s = FractalStrategy(price_data)
+    price_data = pd.read_csv(os.path.join('./binance', f'{symbol}_{basecoin}--{timeframe}.csv'))
+    s = DoubleEMAStrategy(price_data)
     fspace = s.get_hyperparameter_space()
     s.compute_indicators()
 
 
     def f(params):
-        strategy = FractalStrategy(price_data)
-        strategy.set_strategy_hyperparameters(params)
+        strategy = DoubleEMAStrategy(price_data)
+        # strategy.set_strategy_hyperparameters(params)
         strategy.compute_indicators()
 
         total_time, num_of_trades, successful_orders, growth = strategy.partial_test(40)
@@ -44,7 +47,7 @@ if __name__ == '__main__':
     print(f'Growth per day: {growth * 100 / (total_time / 24 / 60)}%')
     print(f'Total growth: {growth * 100}%')
     # Learned model
-    s = FractalStrategy(price_data)
+    s = DoubleEMAStrategy(price_data)
     s.set_strategy_hyperparameters(best)
     s.compute_indicators()
     print('='*25 + 'OPTIMIZED MODEL' + '=' * 25)

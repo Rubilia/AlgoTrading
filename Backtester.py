@@ -1,5 +1,5 @@
 import pandas as pd
-from strategies.Fractal_strategy_1 import FractalStrategy
+from strategies.Fractal.Fractal_strategy import FractalStrategy
 from utils import symbol, basecoin, timeframe
 
 if __name__ == '__main__':
