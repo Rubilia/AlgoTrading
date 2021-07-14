@@ -21,7 +21,7 @@ if __name__ == '__main__':
         strategy.set_strategy_hyperparameters(params)
         strategy.compute_indicators()
 
-        total_time, num_of_trades, successful_orders, growth = strategy.partial_test(25, min_len=60*6, max_len=60 * 24)
+        total_time, num_of_trades, successful_orders, growth = strategy.partial_test(25, min_len=60*4, max_len=60 * 24)
 
         # order_freq = num_of_trades / total_time
         # if order_freq < 1 / (24 * 60):
@@ -39,7 +39,7 @@ if __name__ == '__main__':
 
     Growths = []
     trials = Trials()
-    best = fmin(fn=f, space=fspace, algo=tpe.suggest, max_evals=500, trials=trials)
+    best = fmin(fn=f, space=fspace, algo=tpe.suggest, max_evals=200, trials=trials)
     print('best params: ' + str(best))
     pprint(Growths)
 

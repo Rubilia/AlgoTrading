@@ -18,6 +18,7 @@ df['Date'] = pd.to_datetime(df['Date'], unit='ms')
 df.set_index('Date', inplace=True)
 
 df.to_csv(os.path.join('binance', f'{symbol}_{basecoin}--{timeframe}.csv'))
+print('Data saved')
 
 df['EMA200'] = pd.Series.ewm(df['Close'], span=200).mean()
 df['EMA50'] = pd.Series.ewm(df['Close'], span=50).mean()

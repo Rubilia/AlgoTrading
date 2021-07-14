@@ -1,5 +1,6 @@
 from typing import List, Tuple, Dict
 
+import pandas as pd
 from hyperopt import hp
 
 from Strategy import Strategy, Hyperparameter, DiscreteHyperparameter, Trade
@@ -8,7 +9,7 @@ from Strategy import Strategy, Hyperparameter, DiscreteHyperparameter, Trade
 class DoubleEMAStrategy(Strategy):
     def __init__(self, df_data, show_trades=False):
         super().__init__(df_data, show_trades=show_trades)
-        self.profit_multiplier = Hyperparameter(0.8, 2.5, 1.5)
+        self.profit_multiplier = Hyperparameter(0.8, 3, 1.5)
         self.stop_multiplier = Hyperparameter(.5, 3., 2)
         self.order_risk_limiter = Hyperparameter(0.3, 1., 0.4)
         self.ema_trend_n = DiscreteHyperparameter(list(range(60, 400 + 1)), 200)
@@ -59,6 +60,14 @@ class DoubleEMAStrategy(Strategy):
 
             self.t_min[i] = max(self.ema_trend_n.get_value(), self.ema_signal_n.get_value(),
                                 self.atr_period.get_value())
+            self.compute_cross(data)
+
+    def compute_cross(self, price_data: pd.DataFrame, name='cross'):
+        x = (price_data['ema_signal'].shift(-1) - price_data['ema_trend'].shift(-1)) *\
+            (price_data['ema_signal'] - price_data['ema_trend']) <= 0
+        x = x.map(float)
+        x[0] = 0.
+        price_data[name] = x
 
     def find_cross(self, t, t_min, price_data):
         for p in range(t, t_min, -1):
@@ -81,10 +90,25 @@ class DoubleEMAStrategy(Strategy):
                (price_data['Low'][t] - price_data['ema_signal'][t]) < 0
 
     def find_touch(self, t_cross, t, price_data):
+        p_last = -1
+        p_first = -1
         for p in range(t, t_cross - 1, -1):
             if self.is_touch(p, price_data):
-                return p
+                p_last = p
+                break
+
+        for p in range(t_cross, t + 1):
+            if self.is_touch(p, price_data):
+                p_first = p
+                break
+
+        if p_first == p_last and p_first != -1:
+            return p_first
+
         return -1
+
+    def forward_to_next_trade(self, price_data, t, trade):
+        return t
 
     def place_trade(self, t, t_min, price_data):
         cross, order_type = self.find_cross(t, t_min, price_data)

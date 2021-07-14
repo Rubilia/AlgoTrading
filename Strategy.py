@@ -223,6 +223,9 @@ class Strategy:
             total_balance_change += change_of_balance
         return total_time, num_of_trades, successful_orders, total_balance_change / (self.test_balance * self.risk_per_trade)
 
+    def forward_to_next_trade(self, price_data, t, trade):
+        return t
+
     def test_strategy(self, price_data, t_min, t_max, real_t_min):
         # 100% initial balance
         balance = self.test_balance
@@ -252,6 +255,9 @@ class Strategy:
                     successful_orders += growth > 0
                     balance = (balance - trade_balance) + trade_balance * (growth * self.futures_multiplier + 1) * (1 - self.fee.get_value())
                     order_counter = 0
+                    t = self.forward_to_next_trade(price_data, t)
+                    continue
+
             # Place new orders
             if not is_active:
                 trade_data, is_trade = self.place_trade(t, real_t_min, price_data)
